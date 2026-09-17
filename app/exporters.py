@@ -123,3 +123,40 @@ def export_to_xml(
     )
 
     return output_path
+# --------------------------------------------------
+# 4. Email draft exporter
+# --------------------------------------------------
+
+def export_to_email_draft(
+    structured_answer,
+    filename="email_draft.txt"
+):
+    """
+    Convert a validated StructuredAnswer object into
+    a ready-to-send email draft.
+    """
+
+    output_path = EXPORT_PATH / filename
+
+    email_content = f"""Subject: Information Request — {structured_answer.section}
+
+Hello,
+
+Here is the information requested:
+
+{structured_answer.answer}
+
+Source: {structured_answer.source}
+Document ID: {structured_answer.document_id}
+Section: {structured_answer.section}
+
+Best regards,
+KOHLER Enterprise AI Copilot
+"""
+
+    output_path.write_text(
+        email_content,
+        encoding="utf-8"
+    )
+
+    return output_path
