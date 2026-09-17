@@ -27,12 +27,28 @@ def generate_answer(question, role="employee"):
         top_k=3
     )
 
-    # No evidence found
+    # --------------------------------------------------
+    # Check evidence relevance
+    # --------------------------------------------------
+
     if not results:
-        return "I don't have enough information in the authorized knowledge base to answer that."
+        return (
+            "I don't have enough information in the authorized "
+            "knowledge base to answer that reliably."
+        )
 
+    best_score = results[0]["final_score"]
 
+    if best_score < 0.55:
+        return (
+            "I don't have enough information in the authorized "
+            "knowledge base to answer that reliably."
+        )
+
+    # --------------------------------------------------
     # Build evidence for Gemini
+    # --------------------------------------------------
+
     evidence_parts = []
 
     for i, result in enumerate(results):
@@ -52,7 +68,6 @@ Content:
         )
 
     evidence = "\n".join(evidence_parts)
-
 
     # --------------------------------------------------
     # Grounding instructions
@@ -84,7 +99,6 @@ USER QUESTION:
 {question}
 """
 
-
     # --------------------------------------------------
     # Call Gemini
     # --------------------------------------------------
@@ -110,7 +124,7 @@ if __name__ == "__main__":
 
     answer = generate_answer(
         question,
-        role="employee"
+        role="customer"
     )
 
     print()

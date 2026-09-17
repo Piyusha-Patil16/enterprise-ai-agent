@@ -7,3 +7,6 @@ __pycache__/
 !.env.example
 .vscode/
 .DS_Store
+chroma_db/
+logs/
+exports/
