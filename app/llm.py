@@ -11,7 +11,57 @@ client = genai.Client()
 
 
 # --------------------------------------------------
-# 2. Generate grounded answer
+# 2. Check whether the question is ambiguous
+# --------------------------------------------------
+
+def is_ambiguous(question):
+    """
+    Determine whether the user's question is too vague
+    to answer reliably from the enterprise knowledge base.
+    """
+
+    prompt = f"""
+Determine whether this user question is ambiguous or too vague
+to answer reliably.
+
+Return ONLY one word:
+YES
+or
+NO
+
+Examples:
+
+Question: "What's the limit?"
+Answer: YES
+
+Question: "What is the hotel limit for an international standard region?"
+Answer: NO
+
+Question: "How long do I have to submit receipts?"
+Answer: NO
+
+Question: "What is the policy?"
+Answer: YES
+
+User question:
+{question}
+"""
+
+    response = client.interactions.create(
+        model="gemini-3.6-flash",
+        input=prompt,
+        generation_config={
+            "thinking_level": "low"
+        }
+    )
+
+    result = response.output_text.strip().upper()
+
+    return result.startswith("YES")
+
+
+# --------------------------------------------------
+# 3. Generate grounded answer
 # --------------------------------------------------
 
 def generate_answer(question, role="employee"):
@@ -20,7 +70,23 @@ def generate_answer(question, role="employee"):
     to answer only from that evidence.
     """
 
-    # Retrieve relevant information
+    # --------------------------------------------------
+    # Check ambiguity first
+    # --------------------------------------------------
+
+    if is_ambiguous(question):
+
+        return (
+            "Could you clarify what you mean? "
+            "For example, you can specify whether you "
+            "mean a hotel limit, meal limit, transportation "
+            "limit, or another expense category."
+        )
+
+    # --------------------------------------------------
+    # Retrieve authorized information
+    # --------------------------------------------------
+
     results = search_knowledge_base(
         question,
         role=role,
@@ -32,6 +98,7 @@ def generate_answer(question, role="employee"):
     # --------------------------------------------------
 
     if not results:
+
         return (
             "I don't have enough information in the authorized "
             "knowledge base to answer that reliably."
@@ -40,6 +107,7 @@ def generate_answer(question, role="employee"):
     best_score = results[0]["final_score"]
 
     if best_score < 0.55:
+
         return (
             "I don't have enough information in the authorized "
             "knowledge base to answer that reliably."
@@ -115,16 +183,16 @@ USER QUESTION:
 
 
 # --------------------------------------------------
-# 3. Test
+# 4. Test
 # --------------------------------------------------
 
 if __name__ == "__main__":
 
-    question = "What is the hotel limit for an international standard region?"
+    question = question = "What is the hotel limit for an international standard region?"
 
     answer = generate_answer(
         question,
-        role="customer"
+        role="employee"
     )
 
     print()
