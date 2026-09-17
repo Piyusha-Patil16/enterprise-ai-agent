@@ -1,6 +1,11 @@
-from google import genai
 
-from retrieve import search_knowledge_base
+from google import genai
+from pydantic import BaseModel
+
+try:
+    from retrieve import search_knowledge_base
+except ModuleNotFoundError:
+    from app.retrieve import search_knowledge_base
 
 
 # --------------------------------------------------
@@ -11,7 +16,18 @@ client = genai.Client()
 
 
 # --------------------------------------------------
-# 2. Check whether the question is ambiguous
+# 2. Structured answer schema
+# --------------------------------------------------
+
+class StructuredAnswer(BaseModel):
+    answer: str
+    source: str
+    document_id: str
+    section: str
+
+
+# --------------------------------------------------
+# 3. Check whether the question is ambiguous
 # --------------------------------------------------
 
 def is_ambiguous(question):
@@ -61,7 +77,93 @@ User question:
 
 
 # --------------------------------------------------
-# 3. Generate grounded answer
+# 4. Generate structured JSON answer
+# --------------------------------------------------
+
+def generate_structured_answer(question, role="employee"):
+    """
+    Generate a validated structured answer using only
+    authorized knowledge-base evidence.
+    """
+
+    # Retrieve only documents authorized for this role
+    results = search_knowledge_base(
+        question,
+        role=role,
+        top_k=3
+    )
+
+    # No authorized evidence
+    if not results:
+        return None
+
+    # Check relevance
+    best_score = results[0]["final_score"]
+
+    if best_score < 0.55:
+        return None
+
+    # Use the strongest retrieved result
+    best = results[0]
+
+    metadata = best["metadata"]
+
+    prompt = f"""
+You are the KOHLER Enterprise AI Copilot.
+
+Answer the user's question using ONLY the authorized evidence.
+
+Return ONLY valid JSON with exactly these fields:
+
+{{
+  "answer": "concise answer",
+  "source": "source filename",
+  "document_id": "document ID",
+  "section": "section name"
+}}
+
+Rules:
+
+1. Do not add Markdown.
+2. Do not add explanations outside the JSON.
+3. Do not invent information.
+4. Use only the authorized evidence.
+5. Keep the answer concise.
+
+AUTHORIZED EVIDENCE:
+{best["document"]}
+
+SOURCE:
+{metadata.get("source", "Unknown")}
+
+DOCUMENT ID:
+{metadata.get("document_id", "Unknown")}
+
+SECTION:
+{metadata.get("section", "Unknown")}
+
+USER QUESTION:
+{question}
+"""
+
+    response = client.interactions.create(
+        model="gemini-3.6-flash",
+        input=prompt,
+        generation_config={
+            "thinking_level": "low"
+        }
+    )
+
+    # Validate Gemini's JSON against our Pydantic schema
+    structured = StructuredAnswer.model_validate_json(
+        response.output_text
+    )
+
+    return structured
+
+
+# --------------------------------------------------
+# 5. Generate grounded natural-language answer
 # --------------------------------------------------
 
 def generate_answer(question, role="employee"):
@@ -183,12 +285,12 @@ USER QUESTION:
 
 
 # --------------------------------------------------
-# 4. Test
+# 6. Test
 # --------------------------------------------------
 
 if __name__ == "__main__":
 
-    question = question = "What is the hotel limit for an international standard region?"
+    question = "What is the hotel limit for an international standard region?"
 
     answer = generate_answer(
         question,
