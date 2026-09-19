@@ -140,6 +140,54 @@ question = st.chat_input(
 )
 
 
+# ---------------------------------------------------------
+# Helper: show structured answer metadata
+# ---------------------------------------------------------
+
+def show_provenance(structured_answer):
+    """
+    Display the provenance and access metadata returned
+    by the structured answer pipeline.
+    """
+
+    st.divider()
+
+    st.caption("Answer Provenance")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.write("**Source**")
+        st.write(structured_answer.source)
+
+    with col2:
+        st.write("**Document ID**")
+        st.write(structured_answer.document_id)
+
+    with col3:
+        st.write("**Section**")
+        st.write(structured_answer.section)
+
+    col4, col5 = st.columns(2)
+
+    with col4:
+        st.write("**Confidence**")
+        st.progress(
+            min(max(structured_answer.confidence, 0.0), 1.0)
+        )
+        st.caption(
+            f"{structured_answer.confidence:.3f}"
+        )
+
+    with col5:
+        st.write("**Access Level**")
+        st.write(structured_answer.access_level)
+
+
+# ---------------------------------------------------------
+# Generate response
+# ---------------------------------------------------------
+
 if question:
 
     # ---------------------------------------------
@@ -199,7 +247,6 @@ if question:
                         }
                     )
 
-
                 # =====================================================
                 # JSON
                 # =====================================================
@@ -221,6 +268,8 @@ if question:
                         language="json",
                     )
 
+                    show_provenance(structured_answer)
+
                     st.download_button(
                         label="⬇️ Download JSON",
                         data=json_output,
@@ -235,7 +284,6 @@ if question:
                             "type": "text",
                         }
                     )
-
 
                 # =====================================================
                 # EXCEL
@@ -258,6 +306,8 @@ if question:
                         "Excel summary generated successfully."
                     )
 
+                    show_provenance(structured_answer)
+
                     st.download_button(
                         label="⬇️ Download Excel",
                         data=output_path.read_bytes(),
@@ -277,6 +327,8 @@ if question:
                             "Source": structured_answer.source,
                             "Document ID": structured_answer.document_id,
                             "Section": structured_answer.section,
+                            "Confidence": structured_answer.confidence,
+                            "Access Level": structured_answer.access_level,
                         }
                     )
 
@@ -290,7 +342,6 @@ if question:
                             "type": "download",
                         }
                     )
-
 
                 # =====================================================
                 # XML
@@ -318,6 +369,8 @@ if question:
                         language="xml",
                     )
 
+                    show_provenance(structured_answer)
+
                     st.download_button(
                         label="⬇️ Download XML",
                         data=output_path.read_bytes(),
@@ -332,7 +385,6 @@ if question:
                             "type": "text",
                         }
                     )
-
 
                 # =====================================================
                 # EMAIL DRAFT
@@ -364,6 +416,8 @@ if question:
                         language="text",
                     )
 
+                    show_provenance(structured_answer)
+
                     st.download_button(
                         label="⬇️ Download Email Draft",
                         data=output_path.read_bytes(),
@@ -379,7 +433,6 @@ if question:
                         }
                     )
 
-
             except Exception as error:
 
                 error_message = (
@@ -388,5 +441,4 @@ if question:
                 )
 
                 st.error(error_message)
-
                 st.exception(error)
