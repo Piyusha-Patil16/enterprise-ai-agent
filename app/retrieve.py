@@ -60,12 +60,25 @@ STOP_WORDS = {
     "my",
     "are",
     "how",
+    "does",
+    "do",
+    "about",
+
+    # Generic enterprise words
+    "policy",
+    "policies",
+    "information",
+    "company",
+    "customer",
+    "employee",
+    "employees",
+    "data",
 }
 
 
 def extract_keywords(text):
     """
-    Extract meaningful words from a question.
+    Extract meaningful whole words from a question.
     """
 
     words = re.findall(
@@ -81,7 +94,39 @@ def extract_keywords(text):
 
 
 # --------------------------------------------------
-# 5. Hybrid retrieval
+# 5. Access control
+# --------------------------------------------------
+
+def get_allowed_access_levels(role):
+    """
+    Return the knowledge-base access levels available
+    to the specified user role.
+
+    Employee:
+        - employee
+        - public
+
+    Customer:
+        - customer
+        - public
+
+    Unknown roles:
+        - no access
+    """
+
+    role = role.lower().strip()
+
+    if role == "employee":
+        return ["employee", "public"]
+
+    if role == "customer":
+        return ["customer", "public"]
+
+    return []
+
+
+# --------------------------------------------------
+# 6. Hybrid retrieval
 # --------------------------------------------------
 
 def search_knowledge_base(
@@ -93,11 +138,25 @@ def search_knowledge_base(
     Hybrid retrieval:
 
     1. Chroma semantic similarity
-    2. Keyword overlap
+    2. Whole-word keyword overlap
     3. Combined ranking
+    4. Role-based access control
+    5. Relevance safeguard
 
     Access control is applied during retrieval.
     """
+
+    # ----------------------------------------------
+    # Determine authorized document classes
+    # ----------------------------------------------
+
+    allowed_access_levels = get_allowed_access_levels(
+        role
+    )
+
+    if not allowed_access_levels:
+        return []
+
 
     # ----------------------------------------------
     # Create question embedding
@@ -116,7 +175,9 @@ def search_knowledge_base(
         query_embeddings=[question_embedding],
         n_results=collection.count(),
         where={
-            "access_level": role
+            "access_level": {
+                "$in": allowed_access_levels
+            }
         },
         include=[
             "documents",
@@ -126,18 +187,32 @@ def search_knowledge_base(
     )
 
 
-    documents = results.get("documents", [[]])[0]
-    metadatas = results.get("metadatas", [[]])[0]
-    distances = results.get("distances", [[]])[0]
+    documents = results.get(
+        "documents",
+        [[]]
+    )[0]
+
+    metadatas = results.get(
+        "metadatas",
+        [[]]
+    )[0]
+
+    distances = results.get(
+        "distances",
+        [[]]
+    )[0]
 
 
     # ----------------------------------------------
     # Keyword scoring
     # ----------------------------------------------
 
-    question_keywords = extract_keywords(question)
+    question_keywords = extract_keywords(
+        question
+    )
 
     ranked_results = []
+
 
     for document, metadata, distance in zip(
         documents,
@@ -145,17 +220,34 @@ def search_knowledge_base(
         distances
     ):
 
-        section_title = metadata.get("section", "")
+        section_title = metadata.get(
+            "section",
+            ""
+        )
 
         document_text = (
             section_title + " " + document
         ).lower()
 
+
+        # ------------------------------------------
+        # Whole-word keyword matching
+        # ------------------------------------------
+
+        document_words = set(
+            re.findall(
+                r"\b[a-zA-Z0-9]+\b",
+                document_text
+            )
+        )
+
+
         keyword_matches = sum(
             1
             for keyword in question_keywords
-            if keyword in document_text
+            if keyword in document_words
         )
+
 
         keyword_score = (
             keyword_matches / len(question_keywords)
@@ -164,11 +256,17 @@ def search_knowledge_base(
         )
 
 
-        # Convert distance into a similarity-like score.
+        # ------------------------------------------
+        # Semantic similarity
+        # ------------------------------------------
+
         semantic_score = 1 / (1 + distance)
 
 
-        # Hybrid score.
+        # ------------------------------------------
+        # Hybrid score
+        # ------------------------------------------
+
         final_score = (
             0.65 * semantic_score
             + 0.35 * keyword_score
@@ -197,16 +295,60 @@ def search_knowledge_base(
     )
 
 
-    return ranked_results[:top_k]
+    ranked_results = ranked_results[:top_k]
+
+
+    # ----------------------------------------------
+    # Relevance safeguard
+    # ----------------------------------------------
+    #
+    # A document should not be considered useful
+    # merely because semantic search found it nearby.
+    #
+    # If semantic similarity is only moderate AND
+    # there is almost no keyword overlap, reject it.
+    #
+    # This prevents situations such as:
+    #
+    # Customer asks:
+    # "What is the annual leave policy?"
+    #
+    # Retrieval finds:
+    # "privacy_policy.md"
+    #
+    # even though the privacy document is unrelated.
+    # ----------------------------------------------
+
+    filtered_results = []
+
+    for result in ranked_results:
+
+        semantic_score = result["semantic_score"]
+        keyword_score = result["keyword_score"]
+
+        if (
+            semantic_score < 0.50
+            and keyword_score < 0.20
+        ):
+            continue
+
+        filtered_results.append(
+            result
+        )
+
+
+    return filtered_results
 
 
 # --------------------------------------------------
-# 6. Test retrieval
+# 7. Test retrieval
 # --------------------------------------------------
 
 if __name__ == "__main__":
 
-    question = "international standard hotel limit"
+    question = (
+        "international standard hotel limit"
+    )
 
     print()
     print("Question:")
@@ -222,18 +364,47 @@ if __name__ == "__main__":
     print("Hybrid retrieval results:")
     print("=" * 60)
 
-    for i, result in enumerate(results):
+
+    for i, result in enumerate(
+        results
+    ):
 
         print()
-        print(f"Result {i + 1}")
-        print("-" * 60)
+        print(
+            f"Result {i + 1}"
+        )
+
+        print(
+            "-" * 60
+        )
 
         print(
             result["document"][:500]
         )
 
         print()
+        print("Source:")
+
+        print(
+            result["metadata"].get(
+                "source",
+                "Unknown"
+            )
+        )
+
+        print()
+        print("Access level:")
+
+        print(
+            result["metadata"].get(
+                "access_level",
+                "Unknown"
+            )
+        )
+
+        print()
         print("Section:")
+
         print(
             result["metadata"].get(
                 "section",
