@@ -1,4 +1,4 @@
-import streamlit as st
+﻿import streamlit as st
 
 from llm import generate_answer, generate_structured_answer
 from exporters import (
@@ -6,6 +6,7 @@ from exporters import (
     export_to_xml,
     export_to_email_draft,
 )
+from audit import log_interaction
 
 
 # ---------------------------------------------------------
@@ -14,7 +15,7 @@ from exporters import (
 
 st.set_page_config(
     page_title="KOHLER Enterprise AI Copilot",
-    page_icon="🤖",
+    page_icon="ðŸ¤–",
     layout="wide",
 )
 
@@ -31,7 +32,7 @@ if "messages" not in st.session_state:
 # Header
 # ---------------------------------------------------------
 
-st.title("🤖 KOHLER Enterprise AI Copilot")
+st.title("KOHLER Enterprise AI Copilot")
 
 st.caption(
     "Role-aware enterprise AI assistant for grounded, secure, "
@@ -53,6 +54,14 @@ with st.sidebar:
         "Select your role",
         ["Employee", "Customer"],
     )
+
+    # Reset conversation when the user switches roles.
+    if "active_role" not in st.session_state:
+        st.session_state.active_role = role
+    elif st.session_state.active_role != role:
+        st.session_state.messages = []
+        st.session_state.active_role = role
+        st.rerun()
 
     st.divider()
 
@@ -78,7 +87,7 @@ with st.sidebar:
 
     st.divider()
 
-    if st.button("🗑️ Clear Conversation"):
+    if st.button("Clear Conversation"):
         st.session_state.messages = []
         st.rerun()
 
@@ -92,8 +101,6 @@ with st.sidebar:
         "Synthetic demonstration data only."
     )
 
-
-# ---------------------------------------------------------
 # Main interface
 # ---------------------------------------------------------
 
@@ -145,10 +152,6 @@ question = st.chat_input(
 # ---------------------------------------------------------
 
 def show_provenance(structured_answer):
-    """
-    Display the provenance and access metadata returned
-    by the structured answer pipeline.
-    """
 
     st.divider()
 
@@ -171,15 +174,25 @@ def show_provenance(structured_answer):
     col4, col5 = st.columns(2)
 
     with col4:
+
         st.write("**Confidence**")
+
         st.progress(
-            min(max(structured_answer.confidence, 0.0), 1.0)
+            min(
+                max(
+                    structured_answer.confidence,
+                    0.0,
+                ),
+                1.0,
+            )
         )
+
         st.caption(
             f"{structured_answer.confidence:.3f}"
         )
 
     with col5:
+
         st.write("**Access Level**")
         st.write(structured_answer.access_level)
 
@@ -239,6 +252,18 @@ if question:
 
                     st.write(answer)
 
+                    log_interaction(
+                        role=role.lower(),
+                        question=question,
+                        output_format="Natural Language",
+                        source="Generated response",
+                        document_id="N/A",
+                        section="N/A",
+                        confidence=0.0,
+                        access_level=role.lower(),
+                        result_type="answer",
+                    )
+
                     st.session_state.messages.append(
                         {
                             "role": "assistant",
@@ -259,8 +284,10 @@ if question:
                         conversation_history=previous_messages,
                     )
 
-                    json_output = structured_answer.model_dump_json(
-                        indent=2
+                    json_output = (
+                        structured_answer.model_dump_json(
+                            indent=2
+                        )
                     )
 
                     st.code(
@@ -268,13 +295,27 @@ if question:
                         language="json",
                     )
 
-                    show_provenance(structured_answer)
+                    show_provenance(
+                        structured_answer
+                    )
 
                     st.download_button(
-                        label="⬇️ Download JSON",
+                        label="â¬‡ï¸ Download JSON",
                         data=json_output,
                         file_name="enterprise_answer.json",
                         mime="application/json",
+                    )
+
+                    log_interaction(
+                        role=role.lower(),
+                        question=question,
+                        output_format="JSON",
+                        source=structured_answer.source,
+                        document_id=structured_answer.document_id,
+                        section=structured_answer.section,
+                        confidence=structured_answer.confidence,
+                        access_level=structured_answer.access_level,
+                        result_type="structured_answer",
                     )
 
                     st.session_state.messages.append(
@@ -306,10 +347,12 @@ if question:
                         "Excel summary generated successfully."
                     )
 
-                    show_provenance(structured_answer)
+                    show_provenance(
+                        structured_answer
+                    )
 
                     st.download_button(
-                        label="⬇️ Download Excel",
+                        label="â¬‡ï¸ Download Excel",
                         data=output_path.read_bytes(),
                         file_name="enterprise_answer.xlsx",
                         mime=(
@@ -318,8 +361,9 @@ if question:
                         ),
                     )
 
-                    # Show a preview as well.
-                    st.write("### Excel Summary")
+                    st.write(
+                        "### Excel Summary"
+                    )
 
                     st.write(
                         {
@@ -330,6 +374,18 @@ if question:
                             "Confidence": structured_answer.confidence,
                             "Access Level": structured_answer.access_level,
                         }
+                    )
+
+                    log_interaction(
+                        role=role.lower(),
+                        question=question,
+                        output_format="Excel",
+                        source=structured_answer.source,
+                        document_id=structured_answer.document_id,
+                        section=structured_answer.section,
+                        confidence=structured_answer.confidence,
+                        access_level=structured_answer.access_level,
+                        result_type="exported_answer",
                     )
 
                     st.session_state.messages.append(
@@ -369,13 +425,27 @@ if question:
                         language="xml",
                     )
 
-                    show_provenance(structured_answer)
+                    show_provenance(
+                        structured_answer
+                    )
 
                     st.download_button(
-                        label="⬇️ Download XML",
+                        label="â¬‡ï¸ Download XML",
                         data=output_path.read_bytes(),
                         file_name="enterprise_answer.xml",
                         mime="application/xml",
+                    )
+
+                    log_interaction(
+                        role=role.lower(),
+                        question=question,
+                        output_format="XML",
+                        source=structured_answer.source,
+                        document_id=structured_answer.document_id,
+                        section=structured_answer.section,
+                        confidence=structured_answer.confidence,
+                        access_level=structured_answer.access_level,
+                        result_type="exported_answer",
                     )
 
                     st.session_state.messages.append(
@@ -416,13 +486,27 @@ if question:
                         language="text",
                     )
 
-                    show_provenance(structured_answer)
+                    show_provenance(
+                        structured_answer
+                    )
 
                     st.download_button(
-                        label="⬇️ Download Email Draft",
+                        label="â¬‡ï¸ Download Email Draft",
                         data=output_path.read_bytes(),
                         file_name="email_draft.txt",
                         mime="text/plain",
+                    )
+
+                    log_interaction(
+                        role=role.lower(),
+                        question=question,
+                        output_format="Email Draft",
+                        source=structured_answer.source,
+                        document_id=structured_answer.document_id,
+                        section=structured_answer.section,
+                        confidence=structured_answer.confidence,
+                        access_level=structured_answer.access_level,
+                        result_type="exported_answer",
                     )
 
                     st.session_state.messages.append(
@@ -440,5 +524,11 @@ if question:
                     "your request."
                 )
 
-                st.error(error_message)
-                st.exception(error)
+                st.error(
+                    error_message
+                )
+
+                st.exception(
+                    error
+                )
+
