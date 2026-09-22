@@ -7,7 +7,7 @@ A role-aware enterprise AI agent for secure, grounded access to enterprise knowl
 
 ## Overview
 
-KOHLER Enterprise AI Copilot is a functional prototype for enterprise conversational AI across employee and customer workflows.
+Enterprise AI Copilot is a functional prototype for enterprise conversational AI across employee and customer workflows.
 
 The system combines role-based retrieval, grounded generation, multi-turn context, prompt-injection protection, provenance, and structured business outputs.
 
