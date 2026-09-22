@@ -1,4 +1,4 @@
-﻿# KOHLER Enterprise AI Copilot
+﻿# Enterprise AI Copilot
 
 A role-aware enterprise AI agent for secure, grounded access to enterprise knowledge.
 
