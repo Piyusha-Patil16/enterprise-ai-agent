@@ -10,7 +10,7 @@ except ImportError:
     from app.retrieve import search_knowledge_base
 
 
-MODEL_NAME = "gemini-3.6-flash"
+MODEL_NAME = "gemini-3.1-flash-lite"
 
 client = genai.Client()
 
@@ -385,7 +385,7 @@ Section: <section>
         model=MODEL_NAME,
         input=prompt,
         generation_config={
-            "thinking_level": "low",
+            "thinking_level": "minimal",
         },
     )
 
